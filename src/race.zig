@@ -14,5 +14,5 @@ pub fn main() void {
     var t2 = std.Thread.spawn(.{}, worker, .{}) catch unreachable;
     t1.join();
     t2.join();
-    std.debug.print("expected 200000, got {d}\n", .{counter});
+    std.debug.print("expected 200000, got {}\n", .{counter});
 }
