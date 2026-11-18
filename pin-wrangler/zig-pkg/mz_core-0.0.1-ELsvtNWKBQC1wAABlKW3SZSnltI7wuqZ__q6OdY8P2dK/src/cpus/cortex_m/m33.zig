@@ -1,0 +1,684 @@
+//! Related documentation:
+//! - ARM Cortex-M33 Reference: https://developer.arm.com/documentation/100230/latest/
+const microzig = @import("microzig");
+const mmio = microzig.mmio;
+const shared = @import("shared_types.zig");
+
+pub const cpu_flags: shared.CpuFlags = .{
+    .has_bus_fault = true,
+    .has_mem_manage_fault = true,
+    .has_usage_fault = true,
+};
+
+pub const scb_base_offset = 0x0cfc;
+
+pub const SystemControlBlock = extern struct {
+    /// REVIDR Register.
+    REVIDR: u32,
+    /// CPUID Base Register.
+    CPUID: u32,
+    /// Interrupt Control and State Register.
+    ICSR: mmio.Mmio(packed struct(u32) {
+        /// Contains the active exception number:
+        /// 0 = Thread mode
+        /// Nonzero = The exception number[a] of the currently active exception.
+        VECTACTIVE: u9,
+        reserved0: u2 = 0,
+        /// Return to base. In Handler mode, indicates whether there is more than one active exception.
+        /// 0 = more than one active exception
+        /// 1 = only one active exception.
+        RETTOBASE: u1,
+        /// Indicates the exception number of the highest priority pending enabled exception:
+        /// 0 = no pending exceptions
+        /// Nonzero = the exception number of the highest priority pending enabled exception.
+        VECTPENDING: u9,
+        reserved1: u1 = 0,
+        /// Interrupt pending flag, excluding NMI and Faults:
+        /// 0 = interrupt not pending
+        /// 1 = interrupt pending.
+        ISRPENDING: u1 = 0,
+        /// Indicates whether a pending exception will be serviced on exit from debug
+        /// halt state:
+        /// 0 = will not be serviced
+        /// 1 = will be serviced.
+        ISRPREEMPT: u1,
+        /// SysTick Targets Non-secure. Controls whether in a single SysTick implementation, the SysTick is Secure or Non-secure.
+        /// 0 = Secure
+        /// 1 = Non-secure.
+        STTNS: u1,
+        /// SysTick exception clear-pending bit.
+        ///
+        /// Write:
+        /// 0 = no effect
+        /// 1 = removes the pending state from the SysTick exception.
+        ///
+        /// This bit is WO. On a register read its value is Unknown.
+        /// If your device does not implement the SysTick timer, this bit is Reserved.
+        PENDSTCLR: u1,
+        /// SysTick exception set-pending bit.
+        ///
+        /// Write:
+        /// 0 = no effect1 = changes SysTick exception state to pending.
+        /// Read:
+        /// 0 = SysTick exception is not pending
+        /// 1 = SysTick exception is pending.
+        ///
+        /// If your device does not implement the SysTick timer, this bit is Reserved.
+        PENDSTSET: u1,
+        /// PendSV clear-pending bit.
+        ///
+        /// Write:
+        /// 0 = no effect
+        /// 1 = removes the pending state from the PendSV exception.
+        PENDSVCLR: u1,
+        /// PendSV set-pending bit.
+        ///
+        /// Write:
+        /// 0 = no effect
+        /// 1 = changes PendSV exception state to pending.
+        /// Read:
+        /// 0 = PendSV exception is not pending
+        /// 1 = PendSV exception is pending.
+        ///
+        /// Writing 1 to this bit is the only way to set the PendSV exception state to pending.
+        PENDSVSET: u1,
+        reserved2: u1 = 0,
+        /// NMI clear-pending bit.
+        ///
+        /// Write:
+        /// 0 = no effect
+        /// 1 = removes the pending state from the NMI exception.
+        ///
+        /// This bit is WO. On a register read its value is Unknown.
+        PENDNMICLR: u1,
+        /// NMI set-pending bit.
+        ///
+        /// Write:
+        /// 0 = no effect
+        /// 1 = changes NMI exception state to pending.
+        /// Read:
+        /// 0 = NMI exception is not pending
+        /// 1 = NMI exception is pending.
+        ///
+        /// Because NMI is the highest-priority exception, normally the processor enters the NMI
+        /// exception handler as soon as it detects a write of 1 to this bit. Entering the handler
+        /// then clears this bit to 0. This means a read of this bit by the NMI exception handler
+        /// returns 1 only if the NMI signal is reasserted while the processor is executing that handler.
+        NMIPENDSET: u1,
+    }),
+    /// Vector Table Offset Register.
+    VTOR: u32,
+    /// Application Interrupt and Reset Control Register.
+    AIRCR: mmio.Mmio(packed struct {
+        reserved0: u1 = 0,
+        /// Reserved for debug use. This bit reads as 0. When writing to the register you must
+        /// write 0 to this bit, otherwise behavior is Unpredictable.
+        VECTCLRACTIVE: u1,
+        /// System reset request:
+        /// 0 = no effect
+        /// 1 = requests a system level reset.
+        ///
+        /// This bit reads as 0.
+        SYSRESETREQ: u1,
+        ///System reset request Secure only. The value of this bit defines whether the SYSRESETREQ bit is functional
+        /// in Secure state.
+        /// 0 = SYSRESETREQ functionality is available to both Security states.
+        /// 1 = SYSRESETREQ functionality is available only in Secure state.
+        SYSRESETREQS: u1,
+        /// Data Independent Timing. This bit indicates and allows modification of whether for the selected Security
+        /// state data independent timing operations are guaranteed to be timing invariant with respect to the data values
+        /// being operated on.
+        /// 0 = timing is not guaranteed
+        /// 1 = timing is guaranteed
+        DIT: u1,
+        /// Implicit ESB Enable. This bit indicates and allows modification of whether an implicit Error Synchronization
+        /// Bit is inserted into the instruction stream.
+        /// 0 = No implicit Error Synchronization Bit
+        /// 1 = Insert an implicit Error Synchronization Bit
+        IESB: u1,
+        reserved1: u2 = 0,
+        /// Priority grouping. The value of this field defines the exception priority binary point position for the selected
+        /// value of PRIS.
+        PRIGROUP: u3,
+        reserved2: u2 = 0,
+        /// BusFault, HardFault, and NMI Non-secure enable. The value of this bit defines whether BusFault and NMI
+        /// exceptions are Non-secure, and whether exceptions target the Non-secure HardFault exception.
+        /// 0 = BusFault, HardFault, and NMI are Secure
+        /// 1 = BusFault and NMI are Non-secure and exceptions can target Non-secure HardFault.
+        BFHFNMINS: u1,
+        /// Prioritize Secure exceptions. The value of this bit defines whether Secure exception priority boosting is enabled.
+        /// 0 = Priority ranges of Secure and Non-secure exceptions are identical
+        /// 1 = Secure exceptions have a higher priority than Non-secure exceptions
+        PRIS: u1,
+        /// Data endianness implemented:
+        /// 0 = Little-endian
+        /// 1 = Big-endian.
+        ENDIANNESS: u1,
+        /// Register key:
+        /// Reads as Unknown
+        /// On writes, write 0x05FA to VECTKEY, otherwise the write is ignored.
+        VECTKEY: u16,
+    }),
+    /// System Control Register.
+    SCR: mmio.Mmio(packed struct(u32) {
+        reserved0: u1 = 0,
+        /// Indicates sleep-on-exit when returning from Handler mode to Thread mode:
+        /// 0 = do not sleep when returning to Thread mode.
+        /// 1 = enter sleep, or deep sleep, on return from an ISR to Thread mode.
+        ///
+        /// Setting this bit to 1 enables an interrupt driven application to avoid returning
+        /// to an empty main application.
+        SLEEPONEXIT: u1,
+        /// Controls whether the processor uses sleep or deep sleep as its low power mode:
+        /// 0 = sleep
+        /// 1 = deep sleep.
+        ///
+        /// If your device does not support two sleep modes, the effect of changing the value
+        /// of this bit is implementation-defined.
+        SLEEPDEEP: u1,
+        /// Sleep deep secure. This field controls whether the SLEEPDEEP bit is only accessible from the Secure state.
+        /// 0 = The SLEEPDEEP bit accessible from both Security states.
+        /// 1 = The SLEEPDEEP bit behaves as RAZ/WI when accessed from the Non-secure state..
+        SLEEPDEEPS: u1,
+        /// Send Event on Pending bit:
+        /// 0 = only enabled interrupts or events can wakeup the processor, disabled interrupts are excluded
+        /// 1 = enabled events and all interrupts, including disabled interrupts, can wakeup the processor.
+        ///
+        /// When an event or interrupt enters pending state, the event signal wakes up the processor from WFE.
+        /// If the processor is not waiting for an event, the event is registered and affects the next WFE.
+        ///
+        /// The processor also wakes up on execution of an SEV instruction or an external event.
+        SEVONPEND: u1,
+        reserved1: u27 = 0,
+    }),
+    /// Configuration and Control Register.
+    CCR: mmio.Mmio(packed struct(u32) {
+        reserved0: u1 = 0,
+        /// User set pending determines if unprivileged access to the STIR generates a fault.
+        USERSETMPEND: u1,
+        reserved1: u1 = 0,
+        /// Unaligned trap controls trapping of unaligned word and half word accesses.
+        UNALIGN_TRP: u1,
+        /// Divide by zero trap controls generation of DIVBYZERO usage fault.
+        DIV_0_TRP: u1,
+        reserved2: u3 = 0,
+        /// Determines effect of precise bus faults running on handlers at requested priority less than 0.
+        BFHFNMIGN: u1,
+        reserved3: u1 = 0,
+        /// Controls effect of stack limit violation while executing at a requested priority less than 0.
+        STKOFHFNMIGN: u1,
+        reserved4: u5 = 0,
+        /// Read as zero/write ignored.
+        DC: u1,
+        /// Read as zero/write ignored.
+        IC: u1,
+        /// Read as zero/write ignored.
+        BP: u1,
+        reserved5: u13 = 0,
+    }),
+    /// System Handler Priority Registers.
+    SHPR: [12]u8,
+    /// System Handler Control and State Register.
+    SHCSR: mmio.Mmio(shared.scb.SHCSR),
+    /// Configurable Fault Status Register.
+    CFSR: mmio.Mmio(packed struct(u32) {
+        /// MemManage Fault Register.
+        MMFSR: shared.scb.MMFSR,
+        /// BusFault Status Register.
+        BFSR: shared.scb.BFSR,
+        /// Usage Fault Status Register.
+        UFSR: shared.scb.UFSR,
+    }),
+    /// HardFault Status Register.
+    HFSR: mmio.Mmio(shared.scb.HFSR),
+    reserved0: u32 = 0,
+    /// MemManage Fault Address Register.
+    MMFAR: u32,
+    /// BusFault Address Register.
+    BFAR: u32,
+    /// Auxiliary Fault Status Register not implemented.
+    _AFSR: u32,
+    reserved1: [18]u32,
+    /// Coprocessor Access Control Register.
+    CPACR: mmio.Mmio(packed struct(u32) {
+        CP0: Privilege,
+        CP1: Privilege,
+        CP2: Privilege,
+        CP3: Privilege,
+        CP4: Privilege,
+        CP5: Privilege,
+        CP6: Privilege,
+        CP7: Privilege,
+        reserved16: u4,
+        CP10: Privilege,
+        CP11: Privilege,
+        reserved24: u8,
+
+        pub const Privilege = enum(u2) {
+            /// Access denied. Any attempted access generates a NOCP UsageFault.
+            access_denied = 0b00,
+            /// Privileged access only. An unprivileged access generates a NOCP UsageFault.
+            privileged_access_only = 0b01,
+            reserved = 0b10,
+            /// Full access.
+            full_access = 0b11,
+        };
+    }),
+    /// Non-secure Access Control Register.
+    NSACR: u32,
+};
+
+pub const FloatingPointUnit = extern struct {
+    FPCCR: mmio.Mmio(packed struct(u32) {
+        LSPACT: u1,
+        USER: u1,
+        S: u1,
+        THREAD: u1,
+        HFRDY: u1,
+        MMRDY: u1,
+        BFRDY: u1,
+        SFRDY: u1,
+        MONRDY: u1,
+        SPLIMVIOL: u1,
+        UFRDY: u1,
+        reserved0: u15 = 0,
+        TS: u1,
+        CLRONRETS: u1,
+        CLRONRET: u1,
+        LSPENS: u1,
+        /// Automatic state preservation enable. Enables lazy context save of
+        /// floating-point state. The possible values of this bit are:
+        /// 0 = Disable automatic lazy context save.
+        /// 1 = Enable automatic lazy state preservation for floating-point
+        /// context.
+        ///
+        /// Writes to this bit from Non-secure state are ignored if LSPENS is
+        /// set to one.
+        LSPEN: u1,
+        /// Automatic state preservation enable. Enables CONTROL.FPCA setting
+        /// on execution of a floating-point instruction. This results in
+        /// automatic hardware state preservation and restoration, for
+        /// floating-point context, on exception entry and exit. The possible
+        /// values of this bit are:
+        /// 1 = Enable CONTROL.FPCA setting on execution of a floating-point
+        /// instruction.
+        /// 0 = Disable CONTROL.FPCA setting on execution of a
+        /// floating-point instruction.
+        ASPEN: u1,
+    }),
+    FPCAR: u32,
+    FPDSCR: u32,
+    MVFR0: u32,
+    MVFR1: u32,
+};
+
+pub const NestedVectorInterruptController = extern struct {
+    /// Interrupt Set Registers.
+    ISER: [16]u32,
+    reserved0: [16]u32,
+    /// Interrupt Clear Enable Registers.
+    ICER: [16]u32,
+    reserved1: [16]u32,
+    /// Interrupt Set Pending Registers.
+    ISPR: [16]u32,
+    reserved2: [16]u32,
+    /// Interrupt Clear Pending Registers.
+    ICPR: [16]u32,
+    reserved3: [16]u32,
+    /// Interrupt Active Bit Registers.
+    IABR: [16]u32,
+    reserved4: [16]u32,
+    /// Interrupt Target Non-secure Registers.
+    ITNS: [16]u32,
+    reserved5: [16]u32,
+    /// Interrupt Priority Registers.
+    IPR: [480]u8,
+    reserved6: [584]u32,
+    /// Software Trigger Interrupt Register.
+    STIR: u32,
+
+    pub fn is_enabled(nvic: *volatile NestedVectorInterruptController, num: comptime_int) void {
+        const reg = nvic.ISER[num / 32];
+        return reg & (1 << (num % 32)) != 0;
+    }
+
+    pub fn enable(nvic: *volatile NestedVectorInterruptController, num: comptime_int) void {
+        nvic.ISER[num / 32] |= 1 << (num % 32);
+    }
+
+    pub fn disable(nvic: *volatile NestedVectorInterruptController, num: comptime_int) void {
+        nvic.ICER[num / 32] |= 1 << (num % 32);
+    }
+
+    pub fn is_pending(nvic: *volatile NestedVectorInterruptController, num: comptime_int) void {
+        return nvic.ISPR[num / 32] & (1 << (num % 32)) != 0;
+    }
+
+    pub fn set_pending(nvic: *volatile NestedVectorInterruptController, num: comptime_int) void {
+        nvic.ISPR[num / 32] |= 1 << (num % 32);
+    }
+
+    pub fn clear_pending(nvic: *volatile NestedVectorInterruptController, num: comptime_int) void {
+        nvic.ICPR[num / 32] |= 1 << (num % 32);
+    }
+};
+
+pub const SecurityAttributionUnit = extern struct {
+    /// SAU Control Register.
+    CTRL: u32,
+    /// SAU Type Register.
+    TYPE: u32,
+    /// SAU Region Number Register.
+    RNR: u32,
+    /// SAU Region Base Address.
+    RBAR: u32,
+    /// SAU Region Limit Address.
+    RLAR: u32,
+    /// Secure Fault Status Register.
+    SFSR: u32,
+    /// Secure Fault Address Register.
+    SFAR: u32,
+};
+
+pub const MemoryProtectionUnit = extern struct {
+    /// MPU Type Register.
+    TYPE: mmio.Mmio(packed struct(u32) {
+        /// Indicates support for unified or separate instructions and data address regions.
+        SEPARATE: u1,
+        reserved0: u7 = 0,
+        /// Number of data regions supported by the MPU.
+        DREGION: u8,
+        reserved1: u16 = 0,
+    }),
+    /// MPU Control Register.
+    CTRL: mmio.Mmio(packed struct(u32) {
+        /// Enables the MPU
+        ENABLE: u1,
+        /// Enables of operation of MPU during HardFault and MNIHandlers.
+        HFNMIENA: u1,
+        /// Enables privileged software access to default memory map.
+        PRIVDEFENA: u1,
+        reserved0: u29 = 0,
+    }),
+    /// MPU Region Number Register.
+    RNR: mmio.Mmio(packed struct(u32) {
+        /// Indicates the memory region accessed by MPU RBAR and PMU RLAR.
+        REGION: u8,
+        reserved0: u24 = 0,
+    }),
+    /// MPU Region Base Address Register.
+    RBAR: RBAR_Register,
+    /// MPU Region Limit Address Register.
+    RLAR: RLAR_Register,
+    /// MPU Region Base Address Register Alias 1.
+    RBAR_A1: RBAR_Register,
+    /// MPU Region Base Address Register Alias 2.
+    RBAR_A2: RBAR_Register,
+    /// MPU Region Base Address Register Alias 3.
+    RBAR_A3: RBAR_Register,
+    /// MPU Region Limit Address Register Alias 1.
+    RLAR_A1: RLAR_Register,
+    /// MPU Region Base Address Register Alias 2.
+    RLAR_A2: RLAR_Register,
+    /// MPU Region Base Address Register Alias 3.
+    RLAR_A3: RLAR_Register,
+    reserved0: [20]u8,
+    /// MPU Memory Addribute Indirection Register 0.
+    MPU_MAIR0: u32,
+    /// MPU Memory Addribute Indirection Register 1.
+    MPU_MAIR1: u32,
+
+    /// MPU Region Address Register format.
+    pub const RBAR_Register = mmio.Mmio(packed struct(u32) {
+        /// Execute Never defines if code can be executed from this region.
+        XN: u1,
+        /// Access permissions.
+        AP: u2,
+        /// Shareability.
+        SH: u2,
+        /// Contains bits[31:5] of the lower inclusive limit selectable of the selected MPU memory region. This value
+        /// is zero extended to provide the base address to be checked against.
+        BASE: u27,
+    });
+
+    /// MPU Region Limit Address Register format.
+    pub const RLAR_Register = mmio.Mmio(packed struct(u32) {
+        /// Enable the region.
+        EN: u1,
+        /// Attribute Index associates a set of attributes in the MPU MAIR0 and MPU MAIR1 fields.
+        AttrIndx: u3,
+        reserved0: u1 = 0,
+        /// Limit Address contains bits [31:5] of the upper inclusive limit of the selected MPU memory region. This
+        /// value is postfixed with 0x1F to provide the limit address to be checked against.
+        LIMIT: u27,
+    });
+};
+
+pub const DebugControlBlock = extern struct {
+    /// Debug Halting Control and Status Register
+    ///
+    /// Careful when using .modify() on this register, you should always write
+    /// the DBGKEY to the upper half of the register, otherwise the write will
+    /// be ignored.
+    DHCSR: mmio.Mmio(packed struct(u32) {
+        /// Debug enable.
+        C_DEBUGEN: u1,
+        /// Core halt. When set to 1, halts the core.
+        C_HALT: u1,
+        /// Core step. When set to 1, steps the core.
+        C_STEP: u1,
+        /// Mask interrupts when halting or stepping.
+        C_MASKINTS: u1,
+        reserved0: u1 = 0,
+        /// Snap stall control.
+        C_SNAPSTALL: u1,
+        /// Halt on PMU overflow control.
+        C_PMOV: u1,
+        reserved1: u9 = 0,
+
+        /// Upper 16 bits: write DBGKEY or read status flags
+        upper: packed union(u16) {
+            /// Debug Key. Must be written as 0xA05F to enable writes to this register.
+            DBGKEY: u16,
+            /// Status flags (Read-Only).
+            status: packed struct(u16) {
+                /// Register ready status.
+                S_REGRDY: u1,
+                /// Core halt status.
+                S_HALT: u1,
+                /// Core sleep status.
+                S_SLEEP: u1,
+                /// Core lockup status.
+                S_LOCKUP: u1,
+                /// Secure Debug Enabled status.
+                S_SDE: u1,
+                /// Non-secure Unprivileged Halting Debug Enabled status.
+                S_NSUIDE: u1,
+                /// Secure Unprivileged Halting Debug Enabled status.
+                S_SUIDE: u1,
+                /// Floating-point registers Debuggable status.
+                S_FPD: u1,
+                /// Retire sticky status.
+                S_RETIRE_ST: u1,
+                /// Reset sticky status.
+                S_RESET_ST: u1,
+                /// Restart sticky status.
+                S_RESTART_ST: u1,
+                reserved2: u5 = 0,
+            },
+        },
+    }),
+    /// Debug Core Register Selector Register
+    DCRSR: mmio.Mmio(packed struct(u32) {
+        /// Register selector.
+        REGSEL: u8,
+        reserved0: u8 = 0,
+        /// Write / not Read access to the selected core register.
+        /// 0 = Read
+        /// 1 = Write
+        REGWnR: u1,
+        reserved1: u15 = 0,
+    }),
+    /// Debug Core Register Data Register
+    DCRDR: u32,
+    /// Debug Exception and Monitor Control Register
+    DEMCR: mmio.Mmio(packed struct(u32) {
+        /// Vector catch on core reset.
+        VC_CORERESET: u1,
+        reserved0: u3 = 0,
+        /// Vector catch on Memory Management Fault.
+        VC_MMERR: u1,
+        /// Vector catch on Coprocessor Access Fault.
+        VC_NOCPERR: u1,
+        /// Vector catch on Check Fault.
+        VC_CHKERR: u1,
+        /// Vector catch on State Fault.
+        VC_STATERR: u1,
+        /// Vector catch on Bus Fault.
+        VC_BUSERR: u1,
+        /// Vector catch on Interrupt/Exception Fault.
+        VC_INTERR: u1,
+        /// Vector catch on Hard Fault.
+        VC_HARDERR: u1,
+        /// Vector catch on Secure Fault.
+        VC_SFERR: u1,
+        reserved1: u4 = 0,
+        /// Debug Monitor Enable.
+        MON_EN: u1,
+        /// Debug Monitor pending state.
+        MON_PEND: u1,
+        /// Debug Monitor step enable.
+        MON_STEP: u1,
+        /// Debug Monitor request.
+        MON_REQ: u1,
+        /// Secure Debug Monitor Enable.
+        SDME: u1,
+        /// Unprivileged Debug Monitor Enable.
+        UMON_EN: u1,
+        reserved2: u1 = 0,
+        /// Monitor pend request key.
+        MONPRKEY: u1,
+        /// Trace enable. Enables DWT and ITM features.
+        TRCENA: u1,
+        reserved3: u7 = 0,
+    }),
+    /// Debug Set Clear Exception and Monitor Control Register
+    DSCMECR: mmio.Mmio(packed struct(u32) {
+        reserved0: u1 = 0,
+        /// Set monitor pend.
+        SET_MON_PEND: u1,
+        reserved1: u1 = 0,
+        /// Set monitor request.
+        SET_MON_REQ: u1,
+        reserved2: u13 = 0,
+        /// Clear monitor pend.
+        CLR_MON_PEND: u1,
+        reserved3: u1 = 0,
+        /// Clear monitor request.
+        CLR_MON_REQ: u1,
+        reserved4: u12 = 0,
+    }),
+    /// Debug Authentication Control Register
+    DAUTHCTRL: u32,
+    /// Debug Security Control and Status Register
+    DSCSR: mmio.Mmio(packed struct(u32) {
+        /// Secure banked register select enable.
+        SBRSELEN: u1,
+        /// Secure banked register select.
+        SBRSEL: u1,
+        reserved0: u14 = 0,
+        /// Current domain Secure.
+        CDS: u1,
+        /// CDS write-enable key.
+        CDSKEY: u1,
+        reserved1: u14 = 0,
+    }),
+};
+
+pub const DataWatchpointAndTrace = extern struct {
+    /// Control Register
+    CTRL: mmio.Mmio(packed struct(u32) {
+        /// Enables the Cycle Count Register (CYCCNT).
+        CYCCNTENA: u1,
+        /// Reload value for the Post-preset counter.
+        POSTPRESET: u4,
+        /// Reload value for the Post-init counter.
+        POSTINIT: u4,
+        /// Selects the tap on the CYCCNT for POSTCNT.
+        CYCTAP: u1,
+        /// Synchronization tap select.
+        SYNCTAP: u2,
+        /// Enables PC sampling.
+        PCSAMPLENA: u1,
+        reserved0: u3 = 0,
+        /// Enables Exception trace.
+        EXCTRCENA: u1,
+        /// Enables CPI event trace.
+        CPIEVTENA: u1,
+        /// Enables Exception event trace.
+        EXCEVTENA: u1,
+        /// Enables Sleep event trace.
+        SLEEPEVTENA: u1,
+        /// Enables LSU event trace.
+        LSUEVTENA: u1,
+        /// Enables Folded instruction event trace.
+        FOLDEVTENA: u1,
+        /// Enables Cycle count event trace.
+        CYCEVTENA: u1,
+        /// Cycle counter disable secure.
+        CYCDISS: u1 = 0,
+        /// Profiling counter not supported.
+        NOPRFCNT: u1,
+        /// Cycle counter not supported.
+        NOCYCCNT: u1,
+        /// External triggers not supported.
+        NOEXTTRIG: u1,
+        /// Trace packet generation not supported.
+        NOTRCPKT: u1,
+        /// Number of comparators implemented.
+        NUMCOMP: u4,
+    }),
+    /// Cycle Count Register
+    CYCCNT: u32,
+    /// CPI Count Register
+    CPICNT: u32,
+    /// Exception Overhead Count Register
+    EXCCNT: u32,
+    /// Sleep Count Register
+    SLEEPCNT: u32,
+    /// LSU Count Register
+    LSUCNT: u32,
+    /// Folded Instruction Count Register
+    FOLDCNT: u32,
+    /// Program Counter Sample Register
+    PCSR: u32,
+
+    /// DWT Comparators
+    COMPARATORS: [15]Comparator,
+
+    pub const Comparator = extern struct {
+        /// Comparator Value Register
+        COMP: u32,
+        reserved: u32 = 0,
+        /// Comparator Function Register
+        FUNCTION: mmio.Mmio(packed struct(u32) {
+            /// Comparator function (e.g., PC value, data address, data value).
+            FUNCTION: u4,
+            reserved0: u1 = 0,
+            /// Emit range tracing.
+            EMITRANGE: u1,
+            reserved1: u2 = 0,
+            /// Data value size.
+            DATAVSIZE: u2,
+            /// Linked comparator number.
+            LNK1ENA: u1,
+            /// Linked comparator number.
+            DATAVADDR0: u4,
+            reserved2: u9 = 0,
+            /// Comparator matched status.
+            MATCHED: u1,
+            reserved3: u7 = 0,
+        }),
+        VMASK: u32,
+    };
+};

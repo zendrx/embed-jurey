@@ -1,0 +1,38 @@
+.{
+    .name = .mz_port_raspberrypi_rp2xxx,
+    .fingerprint = 0xdf26650f89ed2bc0,
+    .version = "0.0.0",
+    
+    .minimum_zig_version = "0.17.1",.dependencies = .{
+        .@"microzig/build-internals" = .{
+            .url = "https://github.com/ZigEmbeddedGroup/microzig/releases/download/0.17.40/mz_buildinternals.tar.gz",
+            .hash = "mz_buildinternals-0.0.0-LEhCOn03AABtNgHvGaL-CcHo26CkMe4bGdxEiSe9DMqq",
+            .lazy = false,
+        },
+        .@"microzig/modules/riscv32-common" = .{
+            .url = "https://github.com/ZigEmbeddedGroup/microzig/releases/download/0.17.40/riscv32_common.tar.gz",
+            .hash = "riscv32_common-0.0.0--l_2u3ZaAAC92OK-k8A-htcWLfhKFPaIAhBRL37OQVa7",
+            .lazy = false,
+        },
+        .@"pico-sdk" = .{
+            .url = "https://github.com/raspberrypi/pico-sdk/archive/refs/tags/2.1.1.tar.gz",
+            .hash = "N-V-__8AAPtGbwGQkp_3ej_icp5z6qgvjmwoE1AvAcZlh57Z",
+            .lazy = true,
+        },
+        .@"bounded-array" = .{
+            .url = "https://github.com/ZigEmbeddedGroup/microzig/releases/download/0.17.40/bounded_array.tar.gz",
+            .hash = "bounded_array-0.0.1-DCfpPgtFAAB6ZH5oAbLzqL30zIMLh4C9wAy8HS4ug16q",
+            .lazy = false,
+        },
+    },
+    .paths = .{
+        "README.md",
+        "build.zig.zon",
+        "build.zig",
+        "src",
+        "ld",
+        "patches",
+        "tools",
+        "LICENSE",
+    },
+}

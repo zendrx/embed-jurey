@@ -1,0 +1,31 @@
+.{
+    .has_hal = true,
+    .has_board = true,
+    .cpu_name = "cortex_m0plus",
+    .chip_name = "RP2040",
+    .board_name = "RaspberryPi Pico",
+    .ram_image = false,
+    .asserts = false,
+    .stack = .{ .ram_region_index = 0 },
+    .memory_regions = .{ .{
+        .name = null,
+        .tag = .flash,
+        .offset = 268435456,
+        .length = 2097152,
+        .access = .{
+            .read = true,
+            .write = false,
+            .execute = true,
+        },
+    }, .{
+        .name = null,
+        .tag = .ram,
+        .offset = 536870912,
+        .length = 262144,
+        .access = .{
+            .read = true,
+            .write = true,
+            .execute = true,
+        },
+    } },
+}
